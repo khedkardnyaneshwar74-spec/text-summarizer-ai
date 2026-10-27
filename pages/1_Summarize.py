@@ -1,10 +1,13 @@
 """
 Page 1: Summarize Document
 Interactive Summarization Workspace supporting Extractive (TF-IDF) & Abstractive (Transformer).
+Includes Direct Voice Input, Audio File Transcription, Multilingual Support, and Model Limitations Catalog.
 """
 
 import streamlit as st
 import time
+import hashlib
+import urllib.parse
 
 from src.utils.validation import validate_input_text, validate_uploaded_file
 from src.utils.text_statistics import compute_text_statistics, compute_compression_ratio
@@ -15,24 +18,98 @@ from src.summarization.multilingual import detect_language, get_language_display
 from src.utils.voice import (
     render_browser_voice_dictation_html,
     render_tts_audio_player_html,
-    transcribe_wav_audio_bytes,
+    transcribe_audio_bytes,
     SUPPORTED_VOICE_LANGUAGES,
+)
+from src.utils.model_specs import (
+    get_model_limitations_dataframe,
+    render_model_limitations_cards_html,
 )
 from src.evaluation.rouge_metrics import compute_rouge_scores
 from src.data.sample_articles import get_sample_articles
 
+# Set page configuration
 st.set_page_config(
     page_title="Summarize Document | TextSummarize AI",
     page_icon="📝",
     layout="wide",
 )
 
-st.title("📝 Summarization Workspace")
-st.caption("Generate extractive (TF-IDF) and abstractive (Transformer) summaries from multi-format input across English, Hindi, and Marathi.")
+# Custom High-End Styling with Gradients & Glassmorphism
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    /* Page Banner Header */
+    .workspace-banner {
+        background: radial-gradient(circle at 85% 20%, rgba(99, 102, 241, 0.25) 0%, rgba(15, 23, 42, 0) 50%),
+                    linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        border-radius: 18px;
+        padding: 2rem 2.4rem;
+        margin-bottom: 1.8rem;
+        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.4), 0 0 20px rgba(99, 102, 241, 0.1);
+    }
+    .workspace-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 2.3rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #60A5FA 0%, #A78BFA 50%, #F472B6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.4rem;
+        letter-spacing: -0.02em;
+    }
+    .workspace-desc {
+        color: #94A3B8;
+        font-size: 1.05rem;
+        line-height: 1.6;
+    }
+
+    /* Audio Control Card */
+    .audio-hub-card {
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.6) 100%);
+        border: 1px solid rgba(59, 130, 246, 0.25);
+        border-radius: 14px;
+        padding: 1.2rem 1.4rem;
+        margin-bottom: 1.2rem;
+        backdrop-filter: blur(10px);
+    }
+
+    /* Action Buttons */
+    div.stButton > button:first-child {
+        background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+        color: #FFFFFF;
+        font-weight: 600;
+        border-radius: 10px;
+        border: none;
+        padding: 0.65rem 1.4rem;
+        box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+        transition: all 0.2s ease;
+    }
+    div.stButton > button:first-child:hover {
+        background: linear-gradient(135deg, #4338CA 0%, #6D28D9 100%);
+        box-shadow: 0 6px 20px rgba(79, 70, 229, 0.5);
+        transform: translateY(-1px);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Unconditional Global Variables
+detected_lang_code = "en"
 
 # Session state initialization
 if "document_text" not in st.session_state:
     st.session_state.document_text = ""
+if "source_doc_input" not in st.session_state:
+    st.session_state.source_doc_input = ""
 if "reference_summary" not in st.session_state:
     st.session_state.reference_summary = ""
 if "extractive_summary" not in st.session_state:
@@ -47,6 +124,22 @@ if "rouge_results" not in st.session_state:
     st.session_state.rouge_results = {}
 if "selected_lang" not in st.session_state:
     st.session_state.selected_lang = "auto"
+if "last_recorded_hash" not in st.session_state:
+    st.session_state.last_recorded_hash = ""
+if "last_uploaded_audio_hash" not in st.session_state:
+    st.session_state.last_uploaded_audio_hash = ""
+
+# Handle direct Web Speech API injection via URL parameters
+if "spoken_doc" in st.query_params:
+    raw_spoken = st.query_params.get("spoken_doc", "")
+    if raw_spoken:
+        clean_spoken = urllib.parse.unquote(raw_spoken).strip()
+        if clean_spoken:
+            st.session_state.document_text = clean_spoken
+            st.session_state.source_doc_input = clean_spoken
+            st.toast("🎙️ Live voice transcription placed into Source Document Text!", icon="✨")
+    del st.query_params["spoken_doc"]
+    st.rerun()
 
 # Model Cache helper in Streamlit
 @st.cache_resource(show_spinner=False)
@@ -116,18 +209,40 @@ with st.sidebar:
         index=0,
     )
 
-# Document Source selection
+# Workspace Banner
+st.markdown(
+    """
+    <div class="workspace-banner">
+        <div class="workspace-title">Interactive Summarization Workspace</div>
+        <div class="workspace-desc">
+            Directly synthesize documents via <strong>TF-IDF Extractive Salience</strong> and 
+            <strong>Transformer Seq2Seq Abstractive Models</strong> (DistilBART, BART, T5, mT5). 
+            Supports direct voice recording, audio file transcription, and multilingual input across English, Hindi, and Marathi.
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# 1. Source Input Selection (Sample Articles & File Upload)
+st.markdown("### 📥 Source Document Input")
+
 col_sample, col_upload = st.columns([1, 1])
 
 with col_sample:
     samples = get_sample_articles()
-    sample_options = ["Custom Input (Type, Paste, or Dictate below)"] + [f"{s['title']} ({s['category']})" for s in samples]
-    selected_sample = st.selectbox("Load Sample Document (with Reference):", sample_options)
+    sample_options = ["Custom Input (Type, Dictate, or Upload Audio below)"] + [f"{s['title']} ({s['category']})" for s in samples]
+    selected_sample = st.selectbox("Load Curated Sample Document (with Reference):", sample_options)
 
-    if selected_sample != "Custom Input (Type, Paste, or Dictate below)":
+    if selected_sample != "Custom Input (Type, Dictate, or Upload Audio below)":
         idx = sample_options.index(selected_sample) - 1
-        st.session_state.document_text = samples[idx]["article"]
-        st.session_state.reference_summary = samples[idx]["reference_summary"]
+        sample_doc = samples[idx]["article"]
+        sample_ref = samples[idx]["reference_summary"]
+        if st.session_state.get("source_doc_input") != sample_doc:
+            st.session_state.source_doc_input = sample_doc
+            st.session_state.document_text = sample_doc
+            st.session_state.reference_summary = sample_ref
+            st.rerun()
 
 with col_upload:
     uploaded_file = st.file_uploader("Or Upload Document (.txt):", type=["txt"])
@@ -135,43 +250,77 @@ with col_upload:
         file_bytes = uploaded_file.read()
         is_valid, err, decoded_text = validate_uploaded_file(uploaded_file.name, file_bytes)
         if is_valid:
-            st.session_state.document_text = decoded_text
-            st.success(f"Successfully loaded '{uploaded_file.name}' ({len(decoded_text.split()):,} words)")
+            if st.session_state.get("source_doc_input") != decoded_text:
+                st.session_state.source_doc_input = decoded_text
+                st.session_state.document_text = decoded_text
+                st.success(f"Successfully loaded '{uploaded_file.name}' ({len(decoded_text.split()):,} words)")
+                st.rerun()
         else:
             st.error(err)
 
-# Voice & Audio Input Expander
-with st.expander("🎙️ Voice & Audio Summarization (English, Hindi, Marathi)", expanded=False):
-    tab_mic, tab_audio_file = st.tabs(["🔴 Live Microphone Dictation", "📁 Audio File Upload / Recording"])
+# 2. Voice Input & Recorded Audio File Transcription Hub
+with st.expander("🎙️ Voice Input & Recorded Audio Transcription (Direct Auto-Injection)", expanded=False):
+    st.caption("All speech and audio transcriptions automatically populate directly into the Source Document Text below.")
     
-    with tab_mic:
-        st.caption("Click microphone below to dictate text directly into your browser in English, Hindi, or Marathi:")
-        active_code = "en-IN" if st.session_state.selected_lang in ["auto", "en"] else f"{st.session_state.selected_lang}-IN"
-        st.components.v1.html(render_browser_voice_dictation_html(active_code), height=130)
+    active_code = "en-IN" if st.session_state.selected_lang in ["auto", "en"] else f"{st.session_state.selected_lang}-IN"
+    target_speech_lang = "en" if st.session_state.selected_lang in ["auto", "en"] else st.session_state.selected_lang
 
-    with tab_audio_file:
-        voice_rec = st.audio_input("Record Audio from Microphone")
+    vcol1, vcol2 = st.columns([1, 1])
+
+    with vcol1:
+        st.markdown("#### 🔴 Live Microphone Recording")
+        st.caption("Record your voice in English, Hindi, or Marathi:")
+        voice_rec = st.audio_input("Record Audio from Microphone", key="mic_audio_input")
         if voice_rec is not None:
             audio_bytes = voice_rec.read()
-            with st.spinner("Transcribing audio to text..."):
-                ok, trans_text = transcribe_wav_audio_bytes(audio_bytes, language_code=active_code)
-                if ok:
-                    st.session_state.document_text = trans_text
-                    st.success("Transcribed audio successfully!")
-                    st.rerun()
-                else:
-                    st.warning(f"Audio transcription notice: {trans_text}")
+            rec_hash = hashlib.md5(audio_bytes).hexdigest()
+            if st.session_state.get("last_recorded_hash") != rec_hash:
+                with st.spinner("Transcribing speech via local Whisper AI..."):
+                    ok, trans_text = transcribe_audio_bytes(audio_bytes, language_code=target_speech_lang)
+                    if ok:
+                        st.session_state.document_text = trans_text
+                        st.session_state.source_doc_input = trans_text
+                        st.session_state.last_recorded_hash = rec_hash
+                        st.toast("✅ Microphone audio transcribed directly into Source Text!", icon="🎙️")
+                        st.rerun()
+                    else:
+                        st.warning(f"Voice transcription notice: {trans_text}")
 
-# Text Input Area
+    with vcol2:
+        st.markdown("#### 📁 Recorded Audio File Upload")
+        st.caption("Upload an existing recorded audio conversation or speech (.wav):")
+        uploaded_audio = st.file_uploader("Upload Recorded Audio (.wav)", type=["wav"], key="audio_file_uploader")
+        if uploaded_audio is not None:
+            audio_file_bytes = uploaded_audio.read()
+            audio_hash = hashlib.md5(audio_file_bytes).hexdigest()
+            if st.session_state.get("last_uploaded_audio_hash") != audio_hash:
+                with st.spinner(f"Transcribing '{uploaded_audio.name}' via Whisper AI..."):
+                    ok, trans_text = transcribe_audio_bytes(audio_file_bytes, language_code=target_speech_lang)
+                    if ok:
+                        st.session_state.document_text = trans_text
+                        st.session_state.source_doc_input = trans_text
+                        st.session_state.last_uploaded_audio_hash = audio_hash
+                        st.toast(f"✅ Audio file '{uploaded_audio.name}' transcribed directly into Source Text!", icon="📁")
+                        st.rerun()
+                    else:
+                        st.warning(f"Audio transcription notice: {trans_text}")
+
+    st.markdown("---")
+    st.markdown("#### 🌐 Live Browser Web Speech Dictation")
+    st.caption("Alternative streaming speech recognition directly inside your browser window:")
+    st.components.v1.html(render_browser_voice_dictation_html(active_code), height=140)
+
+# 3. Primary Source Document Text Area (Directly Populated)
 input_text = st.text_area(
     "Source Document Text:",
-    value=st.session_state.document_text,
-    height=230,
-    placeholder="Paste, type, or dictate document text here in English, Hindi (हिंदी), or Marathi (मराठी)...",
+    value=st.session_state.get("source_doc_input", st.session_state.document_text),
+    height=240,
+    key="source_doc_input",
+    placeholder="Paste, type, dictate, or upload recorded audio to populate source text here in English, Hindi (हिंदी), or Marathi (मराठी)...",
 )
 st.session_state.document_text = input_text
 
-# Live Text Stats & Language Detection
+# 4. Live Text Statistics & Detected Language
 if input_text.strip():
     detected_lang_code = detect_language(input_text)
     detected_lang_label = get_language_display_name(detected_lang_code)
@@ -184,7 +333,7 @@ if input_text.strip():
     stat_cols[3].metric("Sentences", f"{stats['sentence_count']:,}")
     stat_cols[4].metric("Est. Reading Time", f"{stats['reading_time_sec']}s")
 
-# Reference Summary Input (Optional for ROUGE)
+# 5. Reference Summary Input (Optional for ROUGE)
 with st.expander("🎯 Ground-Truth Reference Summary (Optional - Required for ROUGE evaluation)", expanded=bool(st.session_state.reference_summary)):
     ref_text = st.text_area(
         "Reference Summary:",
@@ -195,7 +344,7 @@ with st.expander("🎯 Ground-Truth Reference Summary (Optional - Required for R
     st.session_state.reference_summary = ref_text
     st.caption("ℹ️ Genuine ROUGE evaluation compares generated summaries against this gold-standard text.")
 
-# Summarization Trigger Button
+# 6. Summarization Trigger Button
 if st.button("⚡ Generate Summaries", use_container_width=True):
     validation = validate_input_text(input_text)
     if not validation.is_valid:
@@ -249,7 +398,7 @@ if st.button("⚡ Generate Summaries", use_container_width=True):
 
         st.success("✅ Summarization completed successfully!")
 
-# Display Summarization Results
+# 7. Display Summarization Results
 if st.session_state.extractive_summary or st.session_state.abstractive_summary:
     st.markdown("---")
     st.markdown("### 📋 Generated Summaries")
@@ -285,12 +434,13 @@ if st.session_state.extractive_summary or st.session_state.abstractive_summary:
 
             # Audio Text-to-Speech playback
             voice_lang = "en-IN" if detected_lang_code == "en" else f"{detected_lang_code}-IN"
-            st.components.v1.html(render_tts_audio_player_html(st.session_state.extractive_summary, voice_lang), height=55)
+            st.components.v1.html(render_tts_audio_player_html(st.session_state.extractive_summary, voice_lang), height=70)
         else:
             st.info("Extractive summarization not run for this document.")
 
     with res_col2:
-        st.markdown(f"#### 🔸 Abstractive Summary ({SUPPORTED_MODELS[st.session_state.selected_model_key]['name']})")
+        model_name = SUPPORTED_MODELS.get(st.session_state.selected_model_key, {}).get("name", "Transformer")
+        st.markdown(f"#### 🔸 Abstractive Summary ({model_name})")
         if st.session_state.abstractive_summary:
             abs_words = len(st.session_state.abstractive_summary.split())
             abs_comp = compute_compression_ratio(orig_words, abs_words)
@@ -314,7 +464,7 @@ if st.session_state.extractive_summary or st.session_state.abstractive_summary:
 
             # Audio Text-to-Speech playback
             voice_lang = "en-IN" if detected_lang_code == "en" else f"{detected_lang_code}-IN"
-            st.components.v1.html(render_tts_audio_player_html(st.session_state.abstractive_summary, voice_lang), height=55)
+            st.components.v1.html(render_tts_audio_player_html(st.session_state.abstractive_summary, voice_lang), height=70)
         else:
             st.info("Abstractive summarization not run for this document.")
 
@@ -362,3 +512,19 @@ if st.session_state.extractive_summary or st.session_state.abstractive_summary:
     with act_col3:
         if st.button("📊 View Full ROUGE Comparison Dashboard", use_container_width=True):
             st.switch_page("pages/2_Compare_Methods.py")
+
+# 8. Model Architecture Specifications & Operational Limitations Table (Explicit Requirement)
+st.markdown("---")
+with st.expander("📊 Model Architecture Specifications & Operational Limitations Catalog", expanded=False):
+    st.caption("Empirical comparison of architectural paradigms, context window bounds, hardware footprints, and hallucination risks.")
+    
+    # 1. Structured Table
+    df_limits = get_model_limitations_dataframe()
+    st.dataframe(
+        df_limits,
+        use_container_width=True,
+        hide_index=True,
+    )
+    
+    st.markdown("#### 🔍 Architectural Cards & Trade-offs Breakdown")
+    st.markdown(render_model_limitations_cards_html(), unsafe_allow_html=True)

@@ -1,6 +1,7 @@
 """
 Page 2: Compare Methods & ROUGE Evaluation Dashboard
 Side-by-side comparative analysis of Extractive (TF-IDF) vs Abstractive (Transformer) summarization.
+Includes Empirical ROUGE Metrics, Efficiency Benchmarks, and Model Limitations Catalog.
 """
 
 import streamlit as st
@@ -13,6 +14,10 @@ except ImportError:
 
 from src.evaluation.rouge_metrics import compute_rouge_scores
 from src.utils.text_statistics import compute_compression_ratio
+from src.utils.model_specs import (
+    get_model_limitations_dataframe,
+    render_model_limitations_cards_html,
+)
 
 st.set_page_config(
     page_title="Compare Methods & ROUGE | TextSummarize AI",
@@ -20,8 +25,53 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("📊 Method Comparison & ROUGE Evaluation")
-st.caption("Empirical evaluation comparing TF-IDF sentence salience against Transformer abstractive generation.")
+# Custom High-End Styling
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .compare-banner {
+        background: radial-gradient(circle at 15% 30%, rgba(59, 130, 246, 0.25) 0%, rgba(15, 23, 42, 0) 50%),
+                    linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        border-radius: 18px;
+        padding: 2rem 2.4rem;
+        margin-bottom: 1.8rem;
+        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.4);
+    }
+    .compare-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 2.3rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #38BDF8 0%, #818CF8 50%, #C084FC 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.4rem;
+        letter-spacing: -0.02em;
+    }
+    .compare-desc {
+        color: #94A3B8;
+        font-size: 1.05rem;
+        line-height: 1.6;
+    }
+
+    .output-card {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.85) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 14px;
+        padding: 1.3rem;
+        margin-bottom: 1.2rem;
+        backdrop-filter: blur(10px);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # Retrieve data from session state
 doc_text = st.session_state.get("document_text", "")
@@ -31,9 +81,24 @@ ref_summary = st.session_state.get("reference_summary", "")
 ext_meta = st.session_state.get("extractive_metadata", {})
 abs_meta = st.session_state.get("abstractive_metadata", {})
 
+# Header Banner
+st.markdown(
+    """
+    <div class="compare-banner">
+        <div class="compare-title">Comparative Analysis & Evaluation Dashboard</div>
+        <div class="compare-desc">
+            Empirical side-by-side evaluation contrasting <strong>Extractive TF-IDF Salience Ranking</strong> 
+            against <strong>Neural Seq2Seq Transformers</strong> using standardized 
+            <strong>ROUGE-1, ROUGE-2, and ROUGE-L</strong> metrics, compression curves, and latency profiles.
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 if not ext_summary and not abs_summary:
-    st.info("💡 No summaries generated yet. Please visit the **Summarize** page first to enter text and generate summaries.")
-    if st.button("👉 Go to Summarization Workspace"):
+    st.info("💡 No summaries generated yet. Please visit the **Summarize** page first to input text or voice and generate summaries.")
+    if st.button("👉 Open Summarization Workspace"):
         st.switch_page("pages/1_Summarize.py")
     st.stop()
 
@@ -42,10 +107,16 @@ st.markdown("### 🔍 Generated Outputs Inspection")
 c1, c2 = st.columns(2)
 with c1:
     st.markdown("#### 🔹 Extractive Output (TF-IDF)")
-    st.info(ext_summary if ext_summary else "[Not generated]")
+    if ext_summary:
+        st.info(ext_summary)
+    else:
+        st.warning("[Extractive summary not generated]")
 with c2:
     st.markdown("#### 🔸 Abstractive Output (Transformer)")
-    st.success(abs_summary if abs_summary else "[Not generated]")
+    if abs_summary:
+        st.success(abs_summary)
+    else:
+        st.warning("[Abstractive summary not generated]")
 
 # 2. Reference Summary & ROUGE Scores
 st.markdown("---")
@@ -53,9 +124,9 @@ st.markdown("### 🎯 ROUGE Quality Evaluation (ROUGE-1, ROUGE-2, ROUGE-L)")
 
 if not ref_summary.strip():
     st.warning(
-        "⚠️ **Reference-based ROUGE evaluation is currently unavailable because no reference summary was provided.**\n\n"
-        "ROUGE requires a genuine human-written gold-standard reference summary to measure n-gram overlap. "
-        "You can provide a reference summary below or in the **Summarize** workspace to compute real ROUGE scores."
+        "⚠️ **Reference-based ROUGE evaluation is currently awaiting a reference summary.**\n\n"
+        "ROUGE requires a genuine human-written gold-standard reference summary to measure unigram, bigram, and longest common subsequence overlap. "
+        "You can provide a reference summary below to compute real ROUGE scores right now."
     )
     new_ref = st.text_area("Enter Reference Summary to evaluate right now:", value="", height=100)
     if st.button("Evaluate ROUGE Now"):
@@ -101,7 +172,7 @@ else:
                 color="Method",
                 barmode="group",
                 text="F1-Score",
-                color_discrete_map={"Extractive (TF-IDF)": "#3B82F6", "Abstractive (Transformer)": "#10B981"},
+                color_discrete_map={"Extractive (TF-IDF)": "#38BDF8", "Abstractive (Transformer)": "#A78BFA"},
                 title="ROUGE F1-Score Comparison (%)",
             )
             fig_f1.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
@@ -113,7 +184,7 @@ else:
 
         st.caption(
             "ℹ️ **ROUGE Interpretation:** ROUGE scores quantify lexical n-gram and longest common subsequence overlap against the reference. "
-            "A higher ROUGE score indicates closer token alignment with the gold standard, though it does not independently assess semantic veracity or grammatical elegance."
+            "Higher scores denote stronger token alignment with the gold standard."
         )
 
 # 3. Document Statistics & Efficiency Metrics
@@ -133,7 +204,6 @@ abs_lat = abs_meta.get("execution_time", 0.0)
 col_chart1, col_chart2 = st.columns(2)
 
 with col_chart1:
-    # Summary length & compression
     stats_df = pd.DataFrame([
         {"Method": "Original Document", "Words": orig_words, "Compression (%)": 0.0},
         {"Method": "Extractive (TF-IDF)", "Words": ext_words, "Compression (%)": ext_comp},
@@ -147,7 +217,7 @@ with col_chart1:
             color="Method",
             text="Words",
             title="Summary Word Count vs Source Document",
-            color_discrete_sequence=["#64748B", "#3B82F6", "#10B981"],
+            color_discrete_sequence=["#64748B", "#38BDF8", "#A78BFA"],
         )
         fig_len.update_traces(textposition="outside")
         fig_len.update_layout(template="plotly_dark", height=350, showlegend=False)
@@ -157,7 +227,6 @@ with col_chart1:
         st.bar_chart(stats_df.set_index("Method")["Words"], height=300)
 
 with col_chart2:
-    # Inference Latency Comparison
     latency_df = pd.DataFrame([
         {"Method": "Extractive (TF-IDF)", "Latency (s)": ext_lat},
         {"Method": "Abstractive (Transformer)", "Latency (s)": abs_lat},
@@ -170,7 +239,7 @@ with col_chart2:
             color="Method",
             text="Latency (s)",
             title="Processing Latency (Seconds)",
-            color_discrete_map={"Extractive (TF-IDF)": "#3B82F6", "Abstractive (Transformer)": "#10B981"},
+            color_discrete_map={"Extractive (TF-IDF)": "#38BDF8", "Abstractive (Transformer)": "#A78BFA"},
         )
         fig_lat.update_traces(texttemplate="%{text:.3f}s", textposition="outside")
         fig_lat.update_layout(template="plotly_dark", height=350, showlegend=False)
@@ -179,17 +248,13 @@ with col_chart2:
         st.markdown("##### Latency (Seconds)")
         st.bar_chart(latency_df.set_index("Method")["Latency (s)"], height=300)
 
-# 4. Method Trade-off Synthesis Table
+# 4. Model Architecture & Limitations Catalog (Table + Cards)
 st.markdown("---")
-st.markdown("### ⚖️ Architectural Trade-off Synthesis")
+st.markdown("### 📋 Model Limitations & Operational Constraints Catalog")
+st.caption("Standardized architectural breakdown specifying token limits, hardware demands, and hallucination risks for every supported model.")
 
-st.markdown(
-    """
-| Dimension | Extractive Summarization (TF-IDF) | Abstractive Summarization (Transformer) |
-| :--- | :--- | :--- |
-| **Primary Strength** | Fast execution (~0.01s), zero hallucination risk, retains exact author phrasing. | Produces fluent executive summaries, paraphrases verbose discourse naturally. |
-| **Primary Limitation** | May assemble disjoint sentences lacking conversational coherence. | Higher computational overhead, sensitive to sequence length truncation. |
-| **Preservation of Chronology** | **Yes** — Sentences ranked by salience and restored to original document order. | **Yes** — End-to-end autoregressive sequence generation with beam search. |
-| **Ideal Use Case** | Rapid document indexing, legal briefs, medical guidelines, low-power devices. | News digests, executive briefings, general literature overview. |
-"""
-)
+df_limits = get_model_limitations_dataframe()
+st.dataframe(df_limits, use_container_width=True, hide_index=True)
+
+with st.expander("🔍 Detailed Architectural Strengths & Risk Cards", expanded=False):
+    st.markdown(render_model_limitations_cards_html(), unsafe_allow_html=True)

@@ -83,7 +83,7 @@ class AbstractiveSummarizer:
             tokenizer = AutoTokenizer.from_pretrained(self.model_id)
             model = AutoModelForSeq2SeqLM.from_pretrained(
                 self.model_id,
-                torch_dtype=torch.float32 if self.device.type == "cpu" else torch.float16,
+                dtype=torch.float32 if self.device.type == "cpu" else torch.float16,
                 low_cpu_mem_usage=True,
             )
             model.to(self.device)

@@ -38,3 +38,7 @@ Thumbs.db
 build/
 dist/
 *.egg-info/
+
+# Scratch & temporary testing files
+scratch/
+

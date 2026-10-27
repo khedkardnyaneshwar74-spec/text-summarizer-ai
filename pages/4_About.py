@@ -1,9 +1,13 @@
 """
 Page 4: About & Academic Documentation
-Comprehensive technical documentation, mathematical formulations, and free deployment guides.
+Comprehensive technical documentation, mathematical formulations, model limitations catalog, and deployment guides.
 """
 
 import streamlit as st
+from src.utils.model_specs import (
+    get_model_limitations_dataframe,
+    render_model_limitations_cards_html,
+)
 
 st.set_page_config(
     page_title="About & Architecture | TextSummarize AI",
@@ -11,15 +15,66 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("ℹ️ Architecture, Methodology & Documentation")
-st.caption("Theoretical foundations, mathematical formulations, and engineering principles behind TextSummarize AI.")
+# Custom High-End Styling
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .about-banner {
+        background: radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.25) 0%, rgba(15, 23, 42, 0) 50%),
+                    linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        border-radius: 18px;
+        padding: 2rem 2.4rem;
+        margin-bottom: 1.8rem;
+        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.4);
+    }
+    .about-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 2.3rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #A78BFA 0%, #F472B6 50%, #FB7185 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.4rem;
+        letter-spacing: -0.02em;
+    }
+    .about-desc {
+        color: #94A3B8;
+        font-size: 1.05rem;
+        line-height: 1.6;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Header Banner
+st.markdown(
+    """
+    <div class="about-banner">
+        <div class="about-title">Architecture, Methodology & Documentation</div>
+        <div class="about-desc">
+            Theoretical foundations, mathematical formulations, and engineering architecture behind 
+            <strong>TextSummarize AI</strong>. Includes explicit operational constraints, token budgets, and deployment blueprints.
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # Tabs for structured reading
-tab_methods, tab_rouge, tab_deploy, tab_refs = st.tabs([
+tab_methods, tab_rouge, tab_limits, tab_deploy, tab_refs = st.tabs([
     "📐 Summarization Engines",
     "📊 ROUGE Evaluation Mathematics",
-    "🌐 100% Free Deployment Guide",
-    "📚 References & Limitations",
+    "📋 Model Limitations Catalog",
+    "🌐 Deployment Blueprint",
+    "📚 Academic References",
 ])
 
 with tab_methods:
@@ -30,7 +85,7 @@ with tab_methods:
         Extractive summarization identifies and extracts verbatim sentences from the source document that convey the highest informational salience.
 
         #### Mathematical Workflow:
-        1. **Document Segmentation:** The document $D$ is partitioned into sentences $S = \{s_1, s_2, \dots, s_N\}$.
+        1. **Document Segmentation:** The document $D$ is partitioned into sentences $S = \{s_1, s_2, \dots, s_N\}$ with Devanagari danda (`।`/`॥`) support for Hindi & Marathi.
         2. **TF-IDF Transformation:** Each sentence is mapped into a vector space representation:
            $$\\text{TF}(t, s) = \\frac{f_{t, s}}{\\sum_{t' \\in s} f_{t', s}}$$
            $$\\text{IDF}(t, D) = \\log \\left( \\frac{1 + N}{1 + |\\{s \\in D : t \\in s\\}|} \\right) + 1$$
@@ -48,10 +103,11 @@ with tab_methods:
         #### Architecture:
         * **Encoder-Decoder Transformer:** Employs bidirectional self-attention in the encoder and causal masked self-attention with cross-attention in the decoder.
         * **Pretrained Models Supported:**
-          * `sshleifer/distilbart-cnn-12-6`: Distilled student model with 306M parameters; operates with 6x lower latency and low memory footprint (ideal for free-tier CPU hosting).
+          * `sshleifer/distilbart-cnn-12-6`: Distilled student model with 306M parameters; operates with high efficiency and low memory footprint.
           * `facebook/bart-large-cnn`: 406M parameter autoregressive seq2seq model fine-tuned on news highlights.
           * `t5-small`: 60M parameter text-to-text unified Transformer.
-        * **Deterministic Decoding:** Utilizes beam search ($num\\_beams=4$, $length\\_penalty=2.0$) without stochastic sampling to guarantee consistent, reproducible results.
+          * `csebuetnlp/mT5_multilingual_XLSum`: Multilingual seq2seq capable of Hindi and Marathi synthesis.
+        * **Deterministic Decoding:** Utilizes beam search ($num\\_beams=4$, $length\\_penalty=2.0$, $no\\_repeat\\_ngram\\_size=3$) without stochastic sampling to guarantee consistent, reproducible results.
         """
     )
 
@@ -79,30 +135,36 @@ with tab_rouge:
         """
     )
 
+with tab_limits:
+    st.markdown("### 📋 Model Architecture Specifications & Limitations Catalog")
+    st.caption("Standardized catalog delineating paradigm, context bounds, hardware cost, and hallucination risks for every summarization engine.")
+
+    df_limits = get_model_limitations_dataframe()
+    st.dataframe(df_limits, use_container_width=True, hide_index=True)
+
+    st.markdown("#### 🔍 Architectural Breakdown Cards")
+    st.markdown(render_model_limitations_cards_html(), unsafe_allow_html=True)
+
 with tab_deploy:
     st.markdown(
         """
-        ### 🚀 100% Free Hosting & Deployment Guide
+        ### 🚀 Production Deployment Architecture
 
-        This application has been engineered to deploy completely free with zero subscription costs.
+        TextSummarize AI is engineered for lightweight, self-contained deployment across cloud environments with 0 external API dependencies.
 
-        #### Option A: Hugging Face Spaces (Recommended for ML/NLP - 16GB Free RAM)
-        1. Create a free account at [huggingface.co](https://huggingface.co).
-        2. Click **New Space** → Name it `textsummarize-ai`.
-        3. Select **Streamlit SDK** and **Free CPU Basic (2 vCPU, 16GB RAM)**.
-        4. Clone the space repository or connect your GitHub repository.
-        5. Push the code:
+        #### Option A: Hugging Face Spaces (CPU Basic)
+        1. Create a Space on Hugging Face with the **Streamlit** SDK.
+        2. Push the repository to the Space git remote:
            ```bash
            git remote add space https://huggingface.co/spaces/YOUR_USERNAME/textsummarize-ai
            git push space main
            ```
-        6. Hugging Face automatically installs `requirements.txt` and starts `app.py`!
+        3. The application will initialize and run automatically.
 
-        #### Option B: Streamlit Community Cloud (1-Click GitHub Deploy)
-        1. Push this repository to your GitHub profile.
-        2. Navigate to [share.streamlit.io](https://share.streamlit.io).
-        3. Click **New App** → Select your repository `textsummarize-ai` → Main file: `app.py`.
-        4. Click **Deploy**. Your app is live with a permanent public HTTPS URL at no cost.
+        #### Option B: Streamlit Community Cloud
+        1. Connect the GitHub repository at `share.streamlit.io`.
+        2. Set entry point to `app.py`.
+        3. The platform deploys on public HTTPS with auto-updates on git push.
         """
     )
 
@@ -115,13 +177,5 @@ with tab_refs:
         2. **Lin, C.-Y. (2004).** *ROUGE: A Package for Automatic Evaluation of Summaries.* Association for Computational Linguistics.
         3. **Raffel, C. et al. (2020).** *Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer.* Journal of Machine Learning Research (JMLR).
         4. **See, A. et al. (2017).** *Get To The Point: Summarization with Pointer-Generator Networks.* (CNN/DailyMail Benchmark).
-
-        ---
-
-        ### ⚠️ System Limitations & Ethical Considerations
-
-        1. **Lexical vs. Semantic Equivalence:** ROUGE evaluates surface n-gram overlap. Paraphrased statements expressing identical facts with alternate synonyms may yield lower ROUGE scores despite being accurate summaries.
-        2. **Context Window Bounds:** Standard Transformers possess input limits (1024 tokens for BART). Extended documents are truncated to the initial 1024 tokens.
-        3. **Hallucination Risk:** While deterministic beam search mitigates stochastic noise, abstractive models can occasionally synthesize unsupported assertions.
         """
     )

@@ -1,6 +1,7 @@
 """
 Page 3: Dataset Benchmark
 Benchmarking Extractive and Abstractive Summarization on CNN/DailyMail dataset.
+Includes Aggregated ROUGE-1/2/L Comparison, Latency Profiling, and CSV Export.
 """
 
 import streamlit as st
@@ -23,16 +24,54 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("🧪 CNN/DailyMail Dataset Benchmark")
-st.caption("Empirically evaluate and compare model quality across standard multi-sentence news articles and gold-standard highlights.")
-
-# Dataset info card
+# Custom High-End Styling
 st.markdown(
     """
-    <div style="background: #1E293B; border: 1px solid #334155; border-radius: 12px; padding: 1.2rem; margin-bottom: 1.5rem;">
-        <strong>Dataset:</strong> <code>abisee/cnn_dailymail (v3.0.0)</code><br>
-        <strong>Domain:</strong> Global journalistic journalism paired with multi-sentence editorial highlights.<br>
-        <strong>Safeguard:</strong> Benchmark runs are strictly bounded (1–10 samples) to ensure fast completion on standard CPU hardware without timeouts.
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .bench-banner {
+        background: radial-gradient(circle at 80% 20%, rgba(16, 185, 129, 0.25) 0%, rgba(15, 23, 42, 0) 50%),
+                    linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 18px;
+        padding: 2rem 2.4rem;
+        margin-bottom: 1.8rem;
+        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.4);
+    }
+    .bench-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 2.3rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #34D399 0%, #38BDF8 50%, #818CF8 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.4rem;
+        letter-spacing: -0.02em;
+    }
+    .bench-desc {
+        color: #94A3B8;
+        font-size: 1.05rem;
+        line-height: 1.6;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Header Banner
+st.markdown(
+    """
+    <div class="bench-banner">
+        <div class="bench-title">CNN/DailyMail Dataset Benchmark</div>
+        <div class="bench-desc">
+            Empirically evaluate and compare model quality across standard multi-sentence news articles and gold-standard editorial highlights.
+            Benchmark runs are strictly bounded (1–10 samples) to ensure fast completion on standard CPU hardware.
+        </div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -146,7 +185,7 @@ if "benchmark_results" in st.session_state:
             barmode="group",
             text="Score (%)",
             title="Aggregate Mean ROUGE F1 Comparison across CNN/DailyMail Samples",
-            color_discrete_map={"Extractive (TF-IDF)": "#3B82F6", "Abstractive (Transformer)": "#10B981"},
+            color_discrete_map={"Extractive (TF-IDF)": "#38BDF8", "Abstractive (Transformer)": "#A78BFA"},
         )
         fig_bench.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
         fig_bench.update_layout(yaxis_range=[0, 100], template="plotly_dark", height=380)
