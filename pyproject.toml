@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "textsummarize-ai"
+version = "1.0.0"
+description = "Intelligent Text Summarization & Evaluation Platform comparing TF-IDF Extractive and Transformer Abstractive models using ROUGE metrics."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "TextSummarize AI Team" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Linguistic",
+]
+dependencies = [
+    "streamlit>=1.35.0",
+    "torch>=2.0.0",
+    "transformers>=4.38.0",
+    "scikit-learn>=1.3.0",
+    "nltk>=3.8.0",
+    "rouge-score>=0.1.2",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "plotly>=5.20.0",
+    "datasets>=2.18.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "ruff>=0.1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"

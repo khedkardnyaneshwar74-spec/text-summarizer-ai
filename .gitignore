@@ -1,0 +1,40 @@
+# Python Bytecode and Caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Model Checkpoints and Large Datasets
+models/
+checkpoints/
+hf_cache/
+*.bin
+*.pt
+*.pth
+*.safetensors
+*.onnx
+
+# Environment and Secrets
+.env
+.env.local
+.streamlit/secrets.toml
+
+# OS and Editor Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Distribution and Builds
+build/
+dist/
+*.egg-info/
