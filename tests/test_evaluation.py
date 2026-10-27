@@ -47,3 +47,17 @@ def test_rouge_partial_overlap():
     assert result.has_reference is True
     assert 0.0 < result.rouge1.f1 <= 100.0
     assert 0.0 < result.rougeL.f1 <= 100.0
+
+
+def test_rouge_multilingual_hindi_marathi():
+    hindi_cand = "चंद्रयान मिशन ने चंद्रमा के दक्षिणी ध्रुव पर सफल लैंडिंग की।"
+    hindi_ref = "इसरो के चंद्रयान मिशन ने चंद्रमा के ध्रुव पर ऐतिहासिक लैंडिंग की।"
+    hindi_res = compute_rouge_scores(hindi_cand, hindi_ref)
+    assert hindi_res.has_reference is True
+    assert hindi_res.rouge1.f1 > 50.0
+
+    marathi_cand = "महाराष्ट्रातील शेतीत आधुनिक कृषी तंत्रज्ञानाचा वापर वाढत आहे।"
+    marathi_ref = "महाराष्ट्रात कृषी तंत्रज्ञानाचा वापर आणि जलसंधारण यशस्वी झाले आहे।"
+    marathi_res = compute_rouge_scores(marathi_cand, marathi_ref)
+    assert marathi_res.has_reference is True
+    assert marathi_res.rouge1.f1 > 40.0

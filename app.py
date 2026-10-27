@@ -164,8 +164,8 @@ with st.sidebar:
         """
     )
     st.markdown("---")
-    st.markdown("### 💡 Free Deployment Ready")
-    st.caption("Configured for 1-click 100% free hosting on **Hugging Face Spaces** & **Streamlit Cloud** with CPU-friendly DistilBART / T5 / BART.")
+    st.markdown("### 🌐 Multilingual & Voice")
+    st.caption("Supports English, Hindi (हिंदी), and Marathi (मराठी) with Real-Time Speech-to-Text & Audio Synthesis.")
 
 # Hero Header
 st.markdown(
@@ -175,14 +175,15 @@ st.markdown(
         <div class="hero-subtitle">
             An intelligent NLP platform comparing traditional <strong>TF-IDF Extractive</strong> sentence ranking 
             with modern <strong>Transformer Abstractive</strong> generation (BART & T5) through standardized 
-            <strong>ROUGE-1, ROUGE-2, and ROUGE-L</strong> metrics.
+            <strong>ROUGE-1, ROUGE-2, and ROUGE-L</strong> metrics across English, Hindi, and Marathi documents.
         </div>
         <div>
             <span class="badge-pill">🚀 Pretrained Transformers</span>
             <span class="badge-pill">📐 TF-IDF Ranking</span>
             <span class="badge-pill">📊 Genuine ROUGE Evaluation</span>
             <span class="badge-pill">📰 CNN/DailyMail Benchmarking</span>
-            <span class="badge-pill">🌐 Zero-Cost Deployment</span>
+            <span class="badge-pill">🌐 Multilingual (EN, HI, MR)</span>
+            <span class="badge-pill">🎙️ Voice Input & Audio Playback</span>
         </div>
     </div>
     """,

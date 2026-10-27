@@ -21,26 +21,35 @@ def split_into_sentences(text: str) -> List[str]:
 
     sentences: List[str] = []
 
-    try:
-        import nltk
-        sentences = nltk.sent_tokenize(normalized)
-    except (ImportError, LookupError, Exception):
-        sentences = []
-
-    if not sentences:
-        # Robust regex-based sentence segmentation fallback
-        # Handles standard sentence terminations, quotes, brackets, and uppercase follow-up
-        pattern = r"(?<=[.!?])\s+(?=[A-Z0-9\"'‘“])"
-        raw_parts = re.split(pattern, normalized)
+    # Multilingual sentence splitting supporting English (. ! ?), Hindi/Marathi (। ॥), and newline boundaries
+    # If text contains Devanagari characters (U+0900 to U+097F) or danda (। ॥)
+    is_indic = bool(re.search(r"[\u0900-\u097F।॥]", normalized))
+    
+    if is_indic:
+        # Split on danda, double danda, period, exclamation, or question mark followed by whitespace or linebreaks
+        raw_parts = re.split(r"(?<=[।॥.!?\n])\s*", normalized)
         for part in raw_parts:
-            # Further split on newline breaks if they separate sentences
-            lines = part.split("\n")
-            for line in lines:
-                cleaned_line = line.strip()
-                if cleaned_line:
-                    sentences.append(cleaned_line)
+            p = part.strip()
+            if p:
+                sentences.append(p)
+    else:
+        try:
+            import nltk
+            sentences = nltk.sent_tokenize(normalized)
+        except (ImportError, LookupError, Exception):
+            sentences = []
 
-    # Filter out empty or whitespace-only sentences
+        if not sentences:
+            pattern = r"(?<=[.!?])\s+(?=[A-Z0-9\"'‘“])"
+            raw_parts = re.split(pattern, normalized)
+            for part in raw_parts:
+                lines = part.split("\n")
+                for line in lines:
+                    cleaned_line = line.strip()
+                    if cleaned_line:
+                        sentences.append(cleaned_line)
+
+    # Filter out empty or degenerate sentences
     cleaned_sentences = [s.strip() for s in sentences if len(s.strip()) > 3]
     return cleaned_sentences if cleaned_sentences else [text.strip()]
 

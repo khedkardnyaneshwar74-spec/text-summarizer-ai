@@ -144,7 +144,12 @@ def compute_rouge_scores(candidate_summary: str, reference_summary: Optional[str
             message="Candidate summary is empty. Scores are 0.",
         )
 
-    # Attempt to use Google rouge_score library if available
+    # Check if text contains Indic / Devanagari characters
+    is_indic = bool(re.search(r"[\u0900-\u097F]", reference_summary + candidate_summary))
+    if is_indic:
+        return compute_pure_python_rouge(candidate_summary, reference_summary)
+
+    # Attempt to use Google rouge_score library if available for English
     try:
         from rouge_score import rouge_scorer
         scorer = rouge_scorer.RougeScorer(["rouge1", "rouge2", "rougeL"], use_stemmer=True)

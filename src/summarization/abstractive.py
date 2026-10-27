@@ -13,19 +13,25 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 SUPPORTED_MODELS = {
     "distilbart": {
         "id": "sshleifer/distilbart-cnn-12-6",
-        "name": "DistilBART-CNN (Fast, Low Memory - Recommended for Free Tier/CPU)",
+        "name": "DistilBART-CNN (High Efficiency)",
         "max_input_tokens": 1024,
         "is_t5": False,
     },
     "bart-large": {
         "id": "facebook/bart-large-cnn",
-        "name": "BART-Large-CNN (High Accuracy, Slower on CPU)",
+        "name": "BART-Large-CNN (High Capacity)",
         "max_input_tokens": 1024,
         "is_t5": False,
     },
     "t5-small": {
         "id": "t5-small",
-        "name": "T5-Small (Ultra-Lightweight)",
+        "name": "T5-Small (Unified Seq2Seq)",
+        "max_input_tokens": 512,
+        "is_t5": True,
+    },
+    "mt5-multilingual": {
+        "id": "csebuetnlp/mT5_multilingual_XLSum",
+        "name": "mT5-Multilingual (English, Hindi, Marathi)",
         "max_input_tokens": 512,
         "is_t5": True,
     },
@@ -34,7 +40,7 @@ SUPPORTED_MODELS = {
 DEFAULT_MODEL_KEY = "distilbart"
 
 # Global in-memory cache for models and tokenizers
-_MODEL_CACHE: Dict[str, Tuple[Any, Any, Any]] = {}
+_MODEL_CACHE: Dict[str, Tuple[Any, Any]] = {}
 
 
 def get_device() -> torch.device:
@@ -51,7 +57,6 @@ class AbstractiveSummarizer:
 
     def __init__(self, model_key: str = DEFAULT_MODEL_KEY):
         if model_key not in SUPPORTED_MODELS:
-            # Fallback if raw Hugging Face model id provided
             self.model_id = model_key
             self.is_t5 = "t5" in model_key.lower()
             self.max_tokens = 512 if self.is_t5 else 1024
@@ -68,10 +73,10 @@ class AbstractiveSummarizer:
         self._load_model()
 
     def _load_model(self):
-        """Load tokenizer and model with singleton caching."""
+        """Load tokenizer and model with singleton caching, independent of removed pipelines."""
         global _MODEL_CACHE
         if self.model_id in _MODEL_CACHE:
-            self.tokenizer, self.model, self.pipeline = _MODEL_CACHE[self.model_id]
+            self.tokenizer, self.model = _MODEL_CACHE[self.model_id]
             return
 
         try:
@@ -84,19 +89,9 @@ class AbstractiveSummarizer:
             model.to(self.device)
             model.eval()
 
-            # Pipeline setup
-            device_index = 0 if self.device.type == "cuda" else -1
-            pipe = pipeline(
-                "summarization",
-                model=model,
-                tokenizer=tokenizer,
-                device=device_index,
-            )
-
-            _MODEL_CACHE[self.model_id] = (tokenizer, model, pipe)
+            _MODEL_CACHE[self.model_id] = (tokenizer, model)
             self.tokenizer = tokenizer
             self.model = model
-            self.pipeline = pipe
         except Exception as e:
             raise RuntimeError(
                 f"Failed to load abstractive summarization model '{self.model_id}': {str(e)}"

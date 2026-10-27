@@ -81,10 +81,18 @@ class ExtractiveSummarizer:
                 "sentence_scores": [(i, s, 1.0) for i, s in enumerate(sentences)],
             }
 
+        import warnings
+        warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
+        
+        from .multilingual import detect_language, get_stopwords_for_language, get_language_display_name
+        
+        lang = detect_language(text)
+        stopwords = get_stopwords_for_language(lang)
+
         # Compute TF-IDF matrix over sentences
         try:
             vectorizer = TfidfVectorizer(
-                stop_words=self.stop_words,
+                stop_words=stopwords,
                 token_pattern=r"(?u)\b\w+\b",
                 lowercase=True,
             )
@@ -137,4 +145,6 @@ class ExtractiveSummarizer:
             "total_sentences": total_sentences,
             "execution_time": elapsed,
             "sentence_scores": sentence_scores,
+            "language": lang,
+            "language_name": get_language_display_name(lang),
         }

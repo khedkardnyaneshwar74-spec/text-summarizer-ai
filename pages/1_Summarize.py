@@ -11,6 +11,13 @@ from src.utils.text_statistics import compute_text_statistics, compute_compressi
 from src.utils.export import export_summary_to_txt, export_summary_to_json
 from src.summarization.extractive import ExtractiveSummarizer
 from src.summarization.abstractive import AbstractiveSummarizer, SUPPORTED_MODELS
+from src.summarization.multilingual import detect_language, get_language_display_name
+from src.utils.voice import (
+    render_browser_voice_dictation_html,
+    render_tts_audio_player_html,
+    transcribe_wav_audio_bytes,
+    SUPPORTED_VOICE_LANGUAGES,
+)
 from src.evaluation.rouge_metrics import compute_rouge_scores
 from src.data.sample_articles import get_sample_articles
 
@@ -21,7 +28,7 @@ st.set_page_config(
 )
 
 st.title("📝 Summarization Workspace")
-st.caption("Generate extractive (TF-IDF) and abstractive (Transformer) summaries from user documents or curated samples.")
+st.caption("Generate extractive (TF-IDF) and abstractive (Transformer) summaries from multi-format input across English, Hindi, and Marathi.")
 
 # Session state initialization
 if "document_text" not in st.session_state:
@@ -38,6 +45,8 @@ if "abstractive_metadata" not in st.session_state:
     st.session_state.abstractive_metadata = {}
 if "rouge_results" not in st.session_state:
     st.session_state.rouge_results = {}
+if "selected_lang" not in st.session_state:
+    st.session_state.selected_lang = "auto"
 
 # Model Cache helper in Streamlit
 @st.cache_resource(show_spinner=False)
@@ -58,9 +67,23 @@ with st.sidebar:
         options=list(model_choices.keys()),
         format_func=lambda k: model_choices[k],
         index=0,
-        help="DistilBART is optimized for speed and free-tier CPU hosting. BART-Large provides higher capacity but is slower on CPU."
+        help="Select the Transformer backbone architecture for neural abstractive summarization.",
     )
     st.session_state.selected_model_key = selected_model_key
+
+    st.markdown("#### Language Configuration")
+    lang_selection = st.selectbox(
+        "Target Language:",
+        options=["auto", "en", "hi", "mr"],
+        format_func=lambda x: {
+            "auto": "🌐 Auto-Detect (EN / HI / MR)",
+            "en": "English",
+            "hi": "Hindi (हिंदी)",
+            "mr": "Marathi (मराठी)",
+        }[x],
+        index=0,
+    )
+    st.session_state.selected_lang = lang_selection
 
     st.markdown("#### Extractive Parameters")
     num_sentences = st.slider(
@@ -68,7 +91,7 @@ with st.sidebar:
         min_value=1,
         max_value=10,
         value=3,
-        help="Number of most salient sentences to extract and preserve in original order.",
+        help="Number of most salient sentences to extract and preserve in original chronological order.",
     )
 
     st.markdown("#### Abstractive Parameters")
@@ -98,16 +121,16 @@ col_sample, col_upload = st.columns([1, 1])
 
 with col_sample:
     samples = get_sample_articles()
-    sample_options = ["Custom Input (Type or Paste below)"] + [f"{s['title']} ({s['category']})" for s in samples]
+    sample_options = ["Custom Input (Type, Paste, or Dictate below)"] + [f"{s['title']} ({s['category']})" for s in samples]
     selected_sample = st.selectbox("Load Sample Document (with Reference):", sample_options)
 
-    if selected_sample != "Custom Input (Type or Paste below)":
+    if selected_sample != "Custom Input (Type, Paste, or Dictate below)":
         idx = sample_options.index(selected_sample) - 1
         st.session_state.document_text = samples[idx]["article"]
         st.session_state.reference_summary = samples[idx]["reference_summary"]
 
 with col_upload:
-    uploaded_file = st.file_uploader("Or Upload Plain Text (.txt) File:", type=["txt"])
+    uploaded_file = st.file_uploader("Or Upload Document (.txt):", type=["txt"])
     if uploaded_file is not None:
         file_bytes = uploaded_file.read()
         is_valid, err, decoded_text = validate_uploaded_file(uploaded_file.name, file_bytes)
@@ -117,23 +140,49 @@ with col_upload:
         else:
             st.error(err)
 
+# Voice & Audio Input Expander
+with st.expander("🎙️ Voice & Audio Summarization (English, Hindi, Marathi)", expanded=False):
+    tab_mic, tab_audio_file = st.tabs(["🔴 Live Microphone Dictation", "📁 Audio File Upload / Recording"])
+    
+    with tab_mic:
+        st.caption("Click microphone below to dictate text directly into your browser in English, Hindi, or Marathi:")
+        active_code = "en-IN" if st.session_state.selected_lang in ["auto", "en"] else f"{st.session_state.selected_lang}-IN"
+        st.components.v1.html(render_browser_voice_dictation_html(active_code), height=130)
+
+    with tab_audio_file:
+        voice_rec = st.audio_input("Record Audio from Microphone")
+        if voice_rec is not None:
+            audio_bytes = voice_rec.read()
+            with st.spinner("Transcribing audio to text..."):
+                ok, trans_text = transcribe_wav_audio_bytes(audio_bytes, language_code=active_code)
+                if ok:
+                    st.session_state.document_text = trans_text
+                    st.success("Transcribed audio successfully!")
+                    st.rerun()
+                else:
+                    st.warning(f"Audio transcription notice: {trans_text}")
+
 # Text Input Area
 input_text = st.text_area(
     "Source Document Text:",
     value=st.session_state.document_text,
-    height=240,
-    placeholder="Paste or type document text here (minimum 15 words)...",
+    height=230,
+    placeholder="Paste, type, or dictate document text here in English, Hindi (हिंदी), or Marathi (मराठी)...",
 )
 st.session_state.document_text = input_text
 
-# Live Text Stats
+# Live Text Stats & Language Detection
 if input_text.strip():
+    detected_lang_code = detect_language(input_text)
+    detected_lang_label = get_language_display_name(detected_lang_code)
     stats = compute_text_statistics(input_text, label="Input")
-    stat_cols = st.columns(4)
-    stat_cols[0].metric("Word Count", f"{stats['word_count']:,}")
-    stat_cols[1].metric("Character Count", f"{stats['char_count']:,}")
-    stat_cols[2].metric("Sentences", f"{stats['sentence_count']:,}")
-    stat_cols[3].metric("Est. Reading Time", f"{stats['reading_time_sec']}s")
+    
+    stat_cols = st.columns(5)
+    stat_cols[0].metric("Detected Language", detected_lang_label)
+    stat_cols[1].metric("Word Count", f"{stats['word_count']:,}")
+    stat_cols[2].metric("Character Count", f"{stats['char_count']:,}")
+    stat_cols[3].metric("Sentences", f"{stats['sentence_count']:,}")
+    stat_cols[4].metric("Est. Reading Time", f"{stats['reading_time_sec']}s")
 
 # Reference Summary Input (Optional for ROUGE)
 with st.expander("🎯 Ground-Truth Reference Summary (Optional - Required for ROUGE evaluation)", expanded=bool(st.session_state.reference_summary)):
@@ -227,12 +276,16 @@ if st.session_state.extractive_summary or st.session_state.abstractive_summary:
             mcol2.metric("Compression", f"{ext_comp}%")
             mcol3.metric("Latency", f"{ext_time:.3f}s")
 
-            # Show sentence ranking breakdown
+            # Sentence ranking breakdown
             with st.expander("🔍 Salient Sentences Breakdown"):
                 for idx, sent, score in st.session_state.extractive_metadata.get("sentence_scores", []):
                     is_chosen = sent in st.session_state.extractive_metadata.get("selected_sentences", [])
                     prefix = "✅ **[Selected]**" if is_chosen else "⚪ [Excluded]"
                     st.markdown(f"{prefix} *Score: {score:.3f}* — {sent}")
+
+            # Audio Text-to-Speech playback
+            voice_lang = "en-IN" if detected_lang_code == "en" else f"{detected_lang_code}-IN"
+            st.components.v1.html(render_tts_audio_player_html(st.session_state.extractive_summary, voice_lang), height=55)
         else:
             st.info("Extractive summarization not run for this document.")
 
@@ -258,6 +311,10 @@ if st.session_state.extractive_summary or st.session_state.abstractive_summary:
 
             if st.session_state.abstractive_metadata.get("truncated"):
                 st.info("ℹ️ Input exceeded Transformer context window; first 1024 tokens summarized.")
+
+            # Audio Text-to-Speech playback
+            voice_lang = "en-IN" if detected_lang_code == "en" else f"{detected_lang_code}-IN"
+            st.components.v1.html(render_tts_audio_player_html(st.session_state.abstractive_summary, voice_lang), height=55)
         else:
             st.info("Abstractive summarization not run for this document.")
 
